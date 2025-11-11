@@ -1,0 +1,241 @@
+# Codessian Cortex - Development Configuration
+# This file contains all configuration settings for the development environment
+
+# Application Configuration
+app:
+  name: "Codessian Cortex"
+  version: "1.0.0"
+  environment: "development"
+  debug: true
+  host: "localhost"
+  port: 8080
+  
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  timeout: 30
+  keepalive: true
+  cors:
+    enabled: true
+    origins: ["http://localhost:3000", "http://localhost:8080"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    headers: ["Content-Type", "Authorization"]
+
+# Database Configuration
+database:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  name: "codessian_cortex_dev"
+  username: "cortex_dev"
+  password: "dev_password"
+  ssl_mode: "disable"
+  max_connections: 10
+  idle_connections: 5
+  connection_timeout: 30
+  
+  # Connection pool settings
+  pool:
+    max_open: 25
+    max_idle: 5
+    max_lifetime: 300
+    
+  # Migration settings
+  migrations:
+    enabled: true
+    directory: "migrations"
+    table: "schema_migrations"
+
+# Logging Configuration
+logging:
+  level: "debug"
+  format: "json"
+  output: "stdout"
+  
+  # File logging (optional)
+  file:
+    enabled: true
+    path: "logs/development.log"
+    max_size: 100  # MB
+    max_backups: 3
+    max_age: 7     # days
+    compress: true
+    
+  # Structured logging fields
+  fields:
+    service: "codessian-cortex"
+    environment: "development"
+    version: "1.0.0"
+
+# Cache Configuration
+cache:
+  type: "redis"
+  host: "localhost"
+  port: 6379
+  password: ""
+  database: 0
+  max_retries: 3
+  dial_timeout: 5
+  read_timeout: 3
+  write_timeout: 3
+  
+  # Cache TTL settings
+  ttl:
+    default: 3600     # 1 hour
+    short: 300        # 5 minutes
+    long: 86400       # 24 hours
+
+# Message Queue Configuration
+queue:
+  type: "rabbitmq"
+  host: "localhost"
+  port: 5672
+  username: "guest"
+  password: "guest"
+  virtual_host: "/"
+  
+  # Queue settings
+  prefetch_count: 10
+  retry_attempts: 3
+  retry_delay: 5
+  
+  # Dead letter queue
+  dead_letter:
+    enabled: true
+    exchange: "dlx"
+    queue: "dead_letter_queue"
+
+# API Configuration
+api:
+  version: "v1"
+  base_path: "/api/v1"
+  
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+    
+  # Authentication
+  auth:
+    type: "jwt"
+    secret: "development_jwt_secret_key_change_in_production"
+    algorithm: "HS256"
+    access_token_ttl: 900    # 15 minutes
+    refresh_token_ttl: 604800  # 7 days
+    
+  # Pagination
+  pagination:
+    default_page_size: 20
+    max_page_size: 100
+
+# Monitoring Configuration
+monitoring:
+  # Metrics
+  metrics:
+    enabled: true
+    endpoint: "/metrics"
+    
+  # Health checks
+  health:
+    enabled: true
+    endpoint: "/health"
+    checks:
+      - "database"
+      - "cache"
+      - "queue"
+      
+  # Distributed tracing
+  tracing:
+    enabled: false
+    type: "jaeger"
+    endpoint: "http://localhost:14268/api/traces"
+    service_name: "codessian-cortex"
+    sample_rate: 1.0
+
+# Security Configuration
+security:
+  # TLS/SSL
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    
+  # CORS
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["*"]
+    
+  # Request validation
+  validation:
+    enabled: true
+    max_request_size: 1048576  # 1MB
+    
+  # SQL injection protection
+  sql_injection:
+    enabled: true
+    
+# Feature Flags
+features:
+  new_ui: true
+  beta_features: true
+  analytics: false
+  debug_mode: true
+  
+# Third-party Integrations
+integrations:
+  # Email service
+  email:
+    enabled: false
+    provider: "smtp"
+    host: "localhost"
+    port: 587
+    username: ""
+    password: ""
+    from_address: "noreply@codessian-cortex.dev"
+    
+  # File storage
+  storage:
+    type: "local"
+    path: "uploads"
+    max_file_size: 10485760  # 10MB
+    allowed_types: ["image/jpeg", "image/png", "application/pdf"]
+    
+  # External APIs
+  external_apis:
+    timeout: 30
+    retry_attempts: 3
+    
+# Development Tools
+development:
+  # Hot reload
+  hot_reload: true
+  
+  # Debug toolbar
+  debug_toolbar: true
+  
+  # Profiling
+  profiling: true
+  
+  # API documentation
+  api_docs:
+    enabled: true
+    endpoint: "/docs"
+    
+  # Database query logging
+  query_logging: true
+  
+  # Memory profiling
+  memory_profiling: false
+
+# Environment Variables Override
+# These can be overridden by environment variables
+env_override:
+  - "DATABASE_URL"
+  - "REDIS_URL"
+  - "SECRET_KEY"
+  - "API_KEY"
+  - "DEBUG"

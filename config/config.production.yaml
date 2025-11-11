@@ -1,0 +1,339 @@
+# Codessian Cortex - Production Configuration
+# This file contains all configuration settings for the production environment
+# WARNING: This file should be kept secure and never contain actual secrets
+
+# Application Configuration
+app:
+  name: "Codessian Cortex"
+  version: "1.0.0"
+  environment: "production"
+  debug: false
+  host: "0.0.0.0"
+  port: 8080
+  
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  timeout: 60
+  keepalive: true
+  cors:
+    enabled: true
+    origins: []  # Configure specific origins in production
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    headers: ["Content-Type", "Authorization", "X-Requested-With"]
+
+# Database Configuration
+database:
+  type: "postgresql"
+  host: "${DATABASE_HOST}"
+  port: 5432
+  name: "${DATABASE_NAME}"
+  username: "${DATABASE_USERNAME}"
+  password: "${DATABASE_PASSWORD}"
+  ssl_mode: "require"
+  max_connections: 100
+  idle_connections: 25
+  connection_timeout: 60
+  
+  # Connection pool settings
+  pool:
+    max_open: 100
+    max_idle: 25
+    max_lifetime: 3600
+    
+  # Migration settings
+  migrations:
+    enabled: true
+    directory: "migrations"
+    table: "schema_migrations"
+    
+  # Read replica configuration
+  read_replicas:
+    enabled: true
+    hosts: ["${READ_REPLICA_HOSTS}"]
+    load_balancing: "round_robin"
+
+# Logging Configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "file"
+  
+  # File logging
+  file:
+    enabled: true
+    path: "logs/production.log"
+    max_size: 500  # MB
+    max_backups: 10
+    max_age: 30    # days
+    compress: true
+    
+  # Structured logging fields
+  fields:
+    service: "codessian-cortex"
+    environment: "production"
+    version: "1.0.0"
+    
+  # Log aggregation
+  aggregation:
+    enabled: true
+    endpoint: "${LOG_AGGREGATION_ENDPOINT}"
+    
+# Cache Configuration
+cache:
+  type: "redis"
+  host: "${REDIS_HOST}"
+  port: 6379
+  password: "${REDIS_PASSWORD}"
+  database: 0
+  max_retries: 5
+  dial_timeout: 10
+  read_timeout: 5
+  write_timeout: 5
+  
+  # Cache TTL settings
+  ttl:
+    default: 1800     # 30 minutes
+    short: 300        # 5 minutes
+    long: 86400       # 24 hours
+    
+  # Redis cluster configuration
+  cluster:
+    enabled: false
+    nodes: ["${REDIS_CLUSTER_NODES}"]
+    
+# Message Queue Configuration
+queue:
+  type: "rabbitmq"
+  host: "${RABBITMQ_HOST}"
+  port: 5672
+  username: "${RABBITMQ_USERNAME}"
+  password: "${RABBITMQ_PASSWORD}"
+  virtual_host: "${RABBITMQ_VHOST}"
+  
+  # Queue settings
+  prefetch_count: 20
+  retry_attempts: 5
+  retry_delay: 10
+  
+  # Dead letter queue
+  dead_letter:
+    enabled: true
+    exchange: "dlx"
+    queue: "dead_letter_queue"
+    
+  # High availability
+  ha:
+    enabled: true
+    policy: "ha-all"
+
+# API Configuration
+api:
+  version: "v1"
+  base_path: "/api/v1"
+  
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 120
+    burst_size: 20
+    
+  # Authentication
+  auth:
+    type: "jwt"
+    secret: "${JWT_SECRET}"
+    algorithm: "HS256"
+    access_token_ttl: 900    # 15 minutes
+    refresh_token_ttl: 604800  # 7 days
+    
+  # Pagination
+  pagination:
+    default_page_size: 50
+    max_page_size: 500
+    
+  # Request validation
+  validation:
+    enabled: true
+    max_request_size: 5242880  # 5MB
+
+# Monitoring Configuration
+monitoring:
+  # Metrics
+  metrics:
+    enabled: true
+    endpoint: "/metrics"
+    
+  # Health checks
+  health:
+    enabled: true
+    endpoint: "/health"
+    checks:
+      - "database"
+      - "cache"
+      - "queue"
+      - "external_services"
+      
+  # Distributed tracing
+  tracing:
+    enabled: true
+    type: "jaeger"
+    endpoint: "${JAEGER_ENDPOINT}"
+    service_name: "codessian-cortex"
+    sample_rate: 0.1
+    
+  # Alerting
+  alerting:
+    enabled: true
+    endpoint: "${ALERTING_ENDPOINT}"
+    
+  # Performance monitoring
+  performance:
+    enabled: true
+    slow_query_threshold: 1000  # milliseconds
+
+# Security Configuration
+security:
+  # TLS/SSL
+  tls:
+    enabled: true
+    cert_file: "${TLS_CERT_FILE}"
+    key_file: "${TLS_KEY_FILE}"
+    min_version: "1.2"
+    
+  # CORS
+  cors:
+    enabled: true
+    allowed_origins: ["${ALLOWED_ORIGINS}"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["Content-Type", "Authorization", "X-Requested-With"]
+    
+  # Request validation
+  validation:
+    enabled: true
+    max_request_size: 5242880  # 5MB
+    
+  # SQL injection protection
+  sql_injection:
+    enabled: true
+    
+  # Rate limiting per IP
+  ip_rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+    
+  # Content Security Policy
+  csp:
+    enabled: true
+    policy: "default-src 'self'"
+    
+  # Security headers
+  headers:
+    x_frame_options: "DENY"
+    x_content_type_options: "nosniff"
+    x_xss_protection: "1; mode=block"
+    strict_transport_security: "max-age=31536000; includeSubDomains"
+
+# Feature Flags
+features:
+  new_ui: false
+  beta_features: false
+  analytics: true
+  debug_mode: false
+  
+# Third-party Integrations
+integrations:
+  # Email service
+  email:
+    enabled: true
+    provider: "${EMAIL_PROVIDER}"
+    host: "${EMAIL_HOST}"
+    port: 587
+    username: "${EMAIL_USERNAME}"
+    password: "${EMAIL_PASSWORD}"
+    from_address: "${FROM_EMAIL}"
+    
+  # File storage
+  storage:
+    type: "s3"
+    bucket: "${S3_BUCKET}"
+    region: "${AWS_REGION}"
+    access_key: "${AWS_ACCESS_KEY}"
+    secret_key: "${AWS_SECRET_KEY}"
+    max_file_size: 52428800  # 50MB
+    allowed_types: ["image/jpeg", "image/png", "application/pdf", "text/plain"]
+    
+  # CDN
+  cdn:
+    enabled: true
+    url: "${CDN_URL}"
+    
+  # External APIs
+  external_apis:
+    timeout: 30
+    retry_attempts: 3
+    
+# High Availability Configuration
+ha:
+  # Load balancing
+  load_balancer:
+    enabled: true
+    type: "round_robin"
+    health_check_interval: 30
+    
+  # Circuit breaker
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    timeout: 60
+    reset_timeout: 300
+    
+  # Graceful shutdown
+  graceful_shutdown:
+    enabled: true
+    timeout: 30
+    
+# Backup Configuration
+backup:
+  # Database backup
+  database:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention_days: 30
+    
+  # File backup
+  files:
+    enabled: true
+    schedule: "0 3 * * *"  # Daily at 3 AM
+    retention_days: 14
+    
+# Compliance Configuration
+compliance:
+  # GDPR compliance
+  gdpr:
+    enabled: true
+    data_retention_days: 2555  # 7 years
+    
+  # Audit logging
+  audit:
+    enabled: true
+    log_sensitive_data: false
+    
+# Environment Variables Override
+# These MUST be set in production environment
+env_required:
+  - "DATABASE_HOST"
+  - "DATABASE_NAME"
+  - "DATABASE_USERNAME"
+  - "DATABASE_PASSWORD"
+  - "REDIS_HOST"
+  - "REDIS_PASSWORD"
+  - "JWT_SECRET"
+  - "EMAIL_PROVIDER"
+  - "EMAIL_HOST"
+  - "EMAIL_USERNAME"
+  - "EMAIL_PASSWORD"
+  - "S3_BUCKET"
+  - "AWS_ACCESS_KEY"
+  - "AWS_SECRET_KEY"

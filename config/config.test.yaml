@@ -1,0 +1,249 @@
+# Codessian Cortex - Test Configuration
+# This file contains all configuration settings for the test environment
+
+# Application Configuration
+app:
+  name: "Codessian Cortex"
+  version: "1.0.0"
+  environment: "test"
+  debug: true
+  host: "localhost"
+  port: 8081  # Different port to avoid conflicts
+  
+# Server Configuration
+server:
+  host: "localhost"
+  port: 8081
+  timeout: 10  # Shorter timeout for tests
+  keepalive: false
+  cors:
+    enabled: true
+    origins: ["*"]  # Allow all for testing
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    headers: ["*"]
+
+# Database Configuration
+database:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  name: "codessian_cortex_test"
+  username: "cortex_test"
+  password: "test_password"
+  ssl_mode: "disable"
+  max_connections: 5  # Fewer connections for tests
+  idle_connections: 2
+  connection_timeout: 5
+  
+  # Connection pool settings
+  pool:
+    max_open: 5
+    max_idle: 2
+    max_lifetime: 60
+    
+  # Migration settings
+  migrations:
+    enabled: true
+    directory: "migrations"
+    table: "schema_migrations"
+    
+  # Test database settings
+  test:
+    drop_on_finish: true  # Drop test database after tests
+    create_on_start: true # Create test database before tests
+
+# Logging Configuration
+logging:
+  level: "warn"  # Less verbose for tests
+  format: "json"
+  output: "stdout"
+  
+  # File logging (disabled for tests)
+  file:
+    enabled: false
+    
+  # Structured logging fields
+  fields:
+    service: "codessian-cortex"
+    environment: "test"
+    version: "1.0.0"
+    
+  # Test-specific logging
+  test:
+    capture_logs: true  # Capture logs for test assertions
+    log_queries: false  # Don't log database queries in tests
+
+# Cache Configuration
+cache:
+  type: "redis"
+  host: "localhost"
+  port: 6380  # Different port for test Redis
+  password: ""
+  database: 15  # Use last database for tests
+  max_retries: 2
+  dial_timeout: 2
+  read_timeout: 2
+  write_timeout: 2
+  
+  # Cache TTL settings (shorter for tests)
+  ttl:
+    default: 60       # 1 minute
+    short: 10         # 10 seconds
+    long: 300         # 5 minutes
+    
+  # Test cache settings
+  test:
+    flush_on_start: true  # Clear cache before tests
+    flush_on_finish: true # Clear cache after tests
+
+# Message Queue Configuration
+queue:
+  type: "memory"  # Use in-memory queue for tests
+  
+  # Queue settings
+  prefetch_count: 1
+  retry_attempts: 1
+  retry_delay: 1
+  
+  # Dead letter queue (disabled for tests)
+  dead_letter:
+    enabled: false
+
+# API Configuration
+api:
+  version: "v1"
+  base_path: "/api/v1"
+  
+  # Rate limiting (disabled for tests)
+  rate_limit:
+    enabled: false
+    
+  # Authentication (simplified for tests)
+  auth:
+    type: "jwt"
+    secret: "test_jwt_secret_key"
+    algorithm: "HS256"
+    access_token_ttl: 3600    # 1 hour for tests
+    refresh_token_ttl: 86400    # 24 hours for tests
+    
+  # Pagination (smaller for tests)
+  pagination:
+    default_page_size: 5
+    max_page_size: 50
+
+# Monitoring Configuration
+monitoring:
+  # Metrics (disabled for tests)
+  metrics:
+    enabled: false
+    
+  # Health checks
+  health:
+    enabled: true
+    endpoint: "/health"
+    checks:
+      - "database"
+      - "cache"
+      
+  # Distributed tracing (disabled for tests)
+  tracing:
+    enabled: false
+
+# Security Configuration
+security:
+  # TLS/SSL (disabled for tests)
+  tls:
+    enabled: false
+    
+  # CORS (permissive for tests)
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["*"]
+    allowed_headers: ["*"]
+    
+  # Request validation
+  validation:
+    enabled: true
+    max_request_size: 1048576  # 1MB
+    
+  # SQL injection protection
+  sql_injection:
+    enabled: true
+
+# Feature Flags
+features:
+  new_ui: true
+  beta_features: true
+  analytics: false
+  debug_mode: true
+  
+# Third-party Integrations
+integrations:
+  # Email service (disabled for tests)
+  email:
+    enabled: false
+    
+  # File storage (local for tests)
+  storage:
+    type: "local"
+    path: "test_uploads"
+    max_file_size: 5242880  # 5MB
+    allowed_types: ["*"]  # Allow all for tests
+    
+  # External APIs (mocked for tests)
+  external_apis:
+    timeout: 5  # Shorter timeout
+    retry_attempts: 1
+    mock_enabled: true  # Use mocks for external APIs
+
+# Test Configuration
+test:
+  # Test database
+  database:
+    template: "template0"  # Use clean template
+    encoding: "UTF8"
+    
+  # Test data
+  fixtures:
+    enabled: true
+    directory: "tests/fixtures"
+    
+  # Test coverage
+  coverage:
+    enabled: true
+    threshold: 80  # Minimum 80% coverage
+    
+  # Test parallelization
+  parallel:
+    enabled: true
+    max_workers: 4
+    
+  # Test isolation
+  isolation:
+    database_transactions: true
+    cache_isolation: true
+    
+  # Test reporting
+  reporting:
+    format: "junit"
+    output: "test-results.xml"
+    
+  # Mock services
+  mocks:
+    enabled: true
+    services:
+      - "email"
+      - "storage"
+      - "external_apis"
+      
+  # Test data generation
+  data_generation:
+    enabled: true
+    faker_seed: 12345  # Fixed seed for reproducible tests
+
+# Environment Variables Override
+env_override:
+  - "TEST_DATABASE_URL"
+  - "TEST_REDIS_URL"
+  - "CI"  # Detect if running in CI environment

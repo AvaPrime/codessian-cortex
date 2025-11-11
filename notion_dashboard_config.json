@@ -1,0 +1,632 @@
+{
+  "dashboard": {
+    "title": "🌟 Ava Prime Dashboard",
+    "icon": "🧠",
+    "cover": "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a",
+    "description": "Codessa Intelligence Command Center",
+    "sections": [
+      {
+        "id": "system_status",
+        "title": "📊 System Status",
+        "type": "callout",
+        "icon": "💫",
+        "content": "Last Sync: {timestamp} | Ava Prime: 🟢 Active | Streams: {count} | Actions: {pending}"
+      },
+      {
+        "id": "recent_intelligence",
+        "title": "🧠 Recent Intelligence (Last 7 Days)",
+        "type": "database_view",
+        "database": "Intelligence_Streams",
+        "view_config": {
+          "type": "table",
+          "filter": {
+            "property": "Date",
+            "date": {
+              "after": "7_days_ago"
+            }
+          },
+          "sort": [
+            {
+              "property": "Date",
+              "direction": "descending"
+            }
+          ],
+          "group_by": "Source",
+          "properties": [
+            "Title",
+            "Source",
+            "Project",
+            "Status",
+            "Date"
+          ]
+        },
+        "buttons": [
+          {
+            "label": "🎯 Morning Briefing",
+            "action": "notion_ai",
+            "prompt": "Generate a morning intelligence briefing from Intelligence_Streams created in the last 24 hours. Summarize key themes, highlight urgent items, and suggest 3 priority actions for today."
+          },
+          {
+            "label": "💎 Create Reflection",
+            "action": "create_page",
+            "database": "Reflections",
+            "template": "reflection_template"
+          }
+        ]
+      },
+      {
+        "id": "codestones_board",
+        "title": "💎 Active Codestones",
+        "type": "database_view",
+        "database": "Codestones",
+        "view_config": {
+          "type": "board",
+          "group_by": "Review_Status",
+          "sort": [
+            {
+              "property": "ECL_Score",
+              "direction": "descending"
+            }
+          ],
+          "filter": {
+            "property": "Review_Status",
+            "select": {
+              "does_not_equal": "🚀 Merged"
+            }
+          },
+          "properties": [
+            "Title",
+            "Language",
+            "ECL_Score",
+            "Assistant",
+            "GitHub_Link"
+          ]
+        },
+        "metrics": [
+          {
+            "label": "High Confidence (ECL ≥ 0.8)",
+            "formula": "prop(\"ECL_Score\") >= 0.8"
+          },
+          {
+            "label": "Needs Review",
+            "formula": "prop(\"Review_Status\") == \"👀 Review\""
+          }
+        ],
+        "buttons": [
+          {
+            "label": "🔍 Request Code Review",
+            "action": "notion_ai",
+            "prompt": "Review this codestone for functionality, code quality, security, and performance. Provide an ECL score recommendation (0.0-1.0) and suggest Review_Status."
+          },
+          {
+            "label": "✅ Approve & Queue for PR",
+            "action": "multi_step",
+            "steps": [
+              {
+                "update_property": "Review_Status",
+                "value": "✅ Approved"
+              },
+              {
+                "create_page": "Execution_Queue",
+                "properties": {
+                  "Title": "PR: Deploy {codestone_title}",
+                  "Action_Type": "PR",
+                  "Source_Codestone": "{relation_to_current}",
+                  "Status": "⏳ Queued"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "reflection_queue",
+        "title": "🔥 Reflection Queue",
+        "type": "database_view",
+        "database": "Reflections",
+        "view_config": {
+          "type": "board",
+          "group_by": "Priority",
+          "filter": {
+            "property": "Synced_to_GitHub",
+            "checkbox": {
+              "equals": false
+            }
+          },
+          "sort": [
+            {
+              "property": "Reflection_Date",
+              "direction": "descending"
+            }
+          ],
+          "properties": [
+            "Title",
+            "Next_Actions",
+            "Priority",
+            "Synced_to_GitHub"
+          ]
+        },
+        "metrics": [
+          {
+            "label": "🔥 Now (Urgent)",
+            "formula": "prop(\"Priority\") == \"🔥 Now\""
+          },
+          {
+            "label": "⏭️ Next (This Week)",
+            "formula": "prop(\"Priority\") == \"⏭️ Next\""
+          }
+        ],
+        "buttons": [
+          {
+            "label": "⚡ Build Execution Queue",
+            "action": "notion_ai",
+            "prompt": "Review Next_Actions in this Reflection. For each action, determine if it should be a GitHub Issue, PR, or Discussion. Create corresponding items in Execution_Queue with appropriate properties. Mark this Reflection as Synced_to_GitHub = true."
+          }
+        ]
+      },
+      {
+        "id": "execution_pipeline",
+        "title": "🚀 Execution Pipeline",
+        "type": "database_view",
+        "database": "Execution_Queue",
+        "view_config": {
+          "type": "board",
+          "group_by": "Status",
+          "sort": [
+            {
+              "property": "Created_Date",
+              "direction": "ascending"
+            }
+          ],
+          "properties": [
+            "Title",
+            "Action_Type",
+            "Target_Repo",
+            "GitHub_URL",
+            "Status"
+          ]
+        },
+        "metrics": [
+          {
+            "label": "⏳ Queued",
+            "formula": "prop(\"Status\") == \"⏳ Queued\""
+          },
+          {
+            "label": "🚀 In GitHub",
+            "formula": "prop(\"Status\") == \"🚀 Pushed\""
+          },
+          {
+            "label": "✅ Completed",
+            "formula": "prop(\"Status\") == \"✅ Completed\""
+          }
+        ],
+        "buttons": [
+          {
+            "label": "🔄 Run Ava Prime Sync",
+            "action": "external_command",
+            "command": "python codessa_sync_daemon.py --execute-only"
+          }
+        ]
+      },
+      {
+        "id": "analytics",
+        "title": "📈 Intelligence Analytics",
+        "type": "metrics_grid",
+        "metrics": [
+          {
+            "label": "Streams This Week",
+            "database": "Intelligence_Streams",
+            "aggregation": "count",
+            "filter": {
+              "property": "Date",
+              "date": {
+                "after": "7_days_ago"
+              }
+            }
+          },
+          {
+            "label": "Codestones Created",
+            "database": "Codestones",
+            "aggregation": "count"
+          },
+          {
+            "label": "Reflections Generated",
+            "database": "Reflections",
+            "aggregation": "count"
+          },
+          {
+            "label": "Actions Executed",
+            "database": "Execution_Queue",
+            "aggregation": "count",
+            "filter": {
+              "property": "Status",
+              "select": {
+                "equals": "✅ Completed"
+              }
+            }
+          },
+          {
+            "label": "Average ECL Score",
+            "database": "Codestones",
+            "aggregation": "average",
+            "property": "ECL_Score"
+          },
+          {
+            "label": "Execution Rate",
+            "formula": "completed / (completed + queued) * 100",
+            "format": "percentage"
+          }
+        ]
+      },
+      {
+        "id": "source_distribution",
+        "title": "🤖 Intelligence by Source (30 Days)",
+        "type": "database_view",
+        "database": "Intelligence_Streams",
+        "view_config": {
+          "type": "table",
+          "group_by": "Source",
+          "filter": {
+            "property": "Date",
+            "date": {
+              "after": "30_days_ago"
+            }
+          },
+          "show_group_counts": true
+        }
+      },
+      {
+        "id": "project_momentum",
+        "title": "🎯 Project Momentum",
+        "type": "database_view",
+        "database": "Intelligence_Streams",
+        "view_config": {
+          "type": "table",
+          "group_by": "Project",
+          "sort": [
+            {
+              "direction": "descending",
+              "type": "count"
+            }
+          ],
+          "show_group_counts": true,
+          "properties": [
+            "Title",
+            "Source",
+            "Status"
+          ]
+        }
+      },
+      {
+        "id": "todays_focus",
+        "title": "🎯 Today's Focus",
+        "type": "text_block",
+        "content": "Use the Morning Briefing button to auto-generate this section daily.\n\n**Streams to Reflect On:**\n- [Generated by ChatGPT/Notion AI]\n\n**Codestones to Review:**\n- [Generated by ChatGPT/Notion AI]\n\n**Actions to Execute:**\n- [Generated by ChatGPT/Notion AI]",
+        "buttons": [
+          {
+            "label": "🌅 Generate Daily Focus",
+            "action": "notion_ai",
+            "prompt": "Review Intelligence_Streams from last 24h, Codestones with Review_Status = Draft or Review, and Reflections with Priority = Now. Generate a focused action list: 3 streams to reflect on, 3 codestones to review, 3 actions to execute. Format as bulleted list."
+          }
+        ]
+      },
+      {
+        "id": "codex_library",
+        "title": "🔮 Codex Library",
+        "type": "text_block",
+        "content": "Synthesized knowledge pages compiled from multiple streams:\n\n📘 Codessa OS Architecture\n📗 Mirage Project\n📙 MHE Implementation\n📕 Philosophy & Principles\n\nCreate new codex pages when a topic accumulates 5+ related streams.",
+        "buttons": [
+          {
+            "label": "✍️ Generate New Codex",
+            "action": "notion_ai",
+            "prompt": "Find all Intelligence_Streams tagged with [selected Project]. Create a comprehensive Codex page with: Overview, Key Concepts, Code Artifacts, Open Questions, Evolution Timeline, Related Work."
+          }
+        ]
+      },
+      {
+        "id": "system_admin",
+        "title": "🛠️ System Administration",
+        "type": "text_block",
+        "content": "**Daemon Status:**\n- Last Capture Sync: {timestamp}\n- Last Execution Sync: {timestamp}\n- Errors: 0\n\n**Schedule:**\n- Next Run: {next_scheduled}\n- Frequency: Every 6 hours\n\n**Database Health:**\n- ✅ Intelligence_Streams: {count}\n- ✅ Codestones: {count}\n- ✅ Reflections: {count}\n- ✅ Execution_Queue: {count}",
+        "buttons": [
+          {
+            "label": "▶️ Manual Sync",
+            "action": "external_command",
+            "command": "python codessa_sync_daemon.py"
+          },
+          {
+            "label": "📋 View Logs",
+            "action": "open_url",
+            "url": "file://./codessa_sync.log"
+          }
+        ]
+      },
+      {
+        "id": "quick_reference",
+        "title": "📚 Quick Reference",
+        "type": "text_block",
+        "content": "**Agent Prompt Library:**\n1. Morning Intelligence Briefing\n2. Stream Reflection Generator\n3. Cross-Intelligence Synthesis\n4. Execution Queue Builder\n5. Codestone Review & Approval\n6. Weekly Intelligence Report\n7. Codex Page Generator\n8. Architecture Decision Review\n9. Debugging Assistant\n10. Context Handoff\n\n**Documentation:**\n- Codessa Setup Guide\n- Sync Daemon Docs\n- Database Schemas\n- Best Practices"
+      }
+    ]
+  },
+  "database_views": {
+    "intelligence_streams": {
+      "default": "table",
+      "available_views": [
+        {
+          "name": "Timeline",
+          "type": "timeline",
+          "config": {
+            "start_date": "Date",
+            "group_by": "Source"
+          }
+        },
+        {
+          "name": "By Project",
+          "type": "board",
+          "config": {
+            "group_by": "Project"
+          }
+        },
+        {
+          "name": "By Source",
+          "type": "board",
+          "config": {
+            "group_by": "Source"
+          }
+        },
+        {
+          "name": "High Priority Raw",
+          "type": "table",
+          "config": {
+            "filter": {
+              "and": [
+                {
+                  "property": "Status",
+                  "select": {
+                    "equals": "🌱 Raw"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "codestones": {
+      "default": "board",
+      "available_views": [
+        {
+          "name": "Ready to Ship",
+          "type": "table",
+          "config": {
+            "filter": {
+              "and": [
+                {
+                  "property": "ECL_Score",
+                  "number": {
+                    "greater_than_or_equal_to": 0.8
+                  }
+                },
+                {
+                  "property": "Review_Status",
+                  "select": {
+                    "equals": "✅ Approved"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Needs Review",
+          "type": "table",
+          "config": {
+            "filter": {
+              "property": "Review_Status",
+              "select": {
+                "equals": "👀 Review"
+              }
+            }
+          }
+        },
+        {
+          "name": "By Language",
+          "type": "board",
+          "config": {
+            "group_by": "Language"
+          }
+        },
+        {
+          "name": "Deployed",
+          "type": "gallery",
+          "config": {
+            "filter": {
+              "property": "GitHub_Link",
+              "url": {
+                "is_not_empty": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "reflections": {
+      "default": "board",
+      "available_views": [
+        {
+          "name": "Action Board",
+          "type": "board",
+          "config": {
+            "group_by": "Priority"
+          }
+        },
+        {
+          "name": "Progress Tracker",
+          "type": "timeline",
+          "config": {
+            "start_date": "Reflection_Date",
+            "color_by": "Synced_to_GitHub"
+          }
+        },
+        {
+          "name": "By Project",
+          "type": "board",
+          "config": {
+            "group_by": "Stream.Project"
+          }
+        }
+      ]
+    },
+    "execution_queue": {
+      "default": "board",
+      "available_views": [
+        {
+          "name": "Pipeline",
+          "type": "board",
+          "config": {
+            "group_by": "Status"
+          }
+        },
+        {
+          "name": "By Repo",
+          "type": "board",
+          "config": {
+            "group_by": "Target_Repo"
+          }
+        },
+        {
+          "name": "Aging Report",
+          "type": "table",
+          "config": {
+            "sort": [
+              {
+                "property": "Created_Date",
+                "direction": "ascending"
+              }
+            ],
+            "formula_column": {
+              "name": "Days Waiting",
+              "formula": "dateBetween(now(), prop(\"Created_Date\"), \"days\")"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "page_templates": {
+    "reflection_template": {
+      "properties": {
+        "Title": "Reflection: {stream_title}",
+        "Priority": "⏭️ Next",
+        "Synced_to_GitHub": false
+      },
+      "content": [
+        {
+          "type": "heading_2",
+          "content": "Summary"
+        },
+        {
+          "type": "paragraph",
+          "content": "[Use Notion AI: 'Summarize the linked Intelligence Stream']"
+        },
+        {
+          "type": "heading_2",
+          "content": "Key Insights"
+        },
+        {
+          "type": "bulleted_list",
+          "content": "- "
+        },
+        {
+          "type": "heading_2",
+          "content": "Questions Raised"
+        },
+        {
+          "type": "bulleted_list",
+          "content": "- "
+        },
+        {
+          "type": "heading_2",
+          "content": "Next Actions"
+        },
+        {
+          "type": "bulleted_list",
+          "content": "- "
+        },
+        {
+          "type": "divider"
+        },
+        {
+          "type": "callout",
+          "icon": "💡",
+          "content": "ECL Assessment: Rate confidence 0.0-1.0 for any code artifacts"
+        }
+      ]
+    }
+  },
+  "automation_workflows": [
+    {
+      "name": "Auto-Archive Old Raw Streams",
+      "trigger": "scheduled",
+      "frequency": "weekly",
+      "condition": {
+        "database": "Intelligence_Streams",
+        "filter": {
+          "and": [
+            {
+              "property": "Status",
+              "select": {
+                "equals": "🌱 Raw"
+              }
+            },
+            {
+              "property": "Date",
+              "date": {
+                "before": "30_days_ago"
+              }
+            }
+          ]
+        }
+      },
+      "action": {
+        "update_property": "Status",
+        "value": "📦 Archived"
+      }
+    },
+    {
+      "name": "High ECL Alert",
+      "trigger": "property_change",
+      "watched_property": "ECL_Score",
+      "condition": {
+        "property": "ECL_Score",
+        "number": {
+          "greater_than_or_equal_to": 0.9
+        }
+      },
+      "action": {
+        "send_notification": "High-confidence codestone detected: {title}"
+      }
+    }
+  ],
+  "notion_instructions": {
+    "setup_steps": [
+      "1. Create a new page in your Codessa workspace",
+      "2. Title it '🌟 Ava Prime Dashboard'",
+      "3. Add a cover image (suggested: cosmic/neural theme)",
+      "4. For each section in 'sections' array:",
+      "   - Create a heading matching the 'title'",
+      "   - If type='database_view': Use /database-inline and select the corresponding DB",
+      "   - Apply the view_config filters, sorts, and groupings",
+      "   - If type='text_block': Add as paragraph or callout",
+      "   - If type='callout': Use /callout with specified icon",
+      "5. Add buttons using Notion's button blocks (requires manual configuration)",
+      "6. Set up views for each database as specified in 'database_views'",
+      "7. Create the reflection template page separately",
+      "8. Link all sections back to this dashboard as your home page"
+    ],
+    "recommended_layout": "Use a 2-column layout for sections where appropriate. System Status and Today's Focus at top (full width), then intelligence and execution views in columns below.",
+    "update_frequency": "Update metrics daily via Morning Briefing. Run Weekly Synthesis every Sunday. Dashboard structure is static but data is dynamic.",
+    "customization_notes": "This is a starting structure. Adapt views, add custom properties, and create additional filtered views based on your workflow patterns."
+  }
+}

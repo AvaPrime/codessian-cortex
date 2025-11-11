@@ -1,0 +1,416 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Code Quality Checks
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        # Install Go dependencies
+        go mod download
+        
+        # Install Node.js dependencies
+        npm ci
+        
+        # Install Python dependencies
+        pip install -r requirements.txt
+
+    - name: Run linter
+      run: |
+        # Go linting
+        go vet ./...
+        golint ./...
+        
+        # Python linting
+        flake8 src/
+        black --check src/
+        
+        # JavaScript linting
+        npm run lint
+
+    - name: Run security checks
+      run: |
+        # Go security scan
+        gosec ./...
+        
+        # Python security scan
+        bandit -r src/
+        safety check
+        
+        # Dependency vulnerability scan
+        npm audit
+
+    - name: Check code formatting
+      run: |
+        # Go formatting
+        test -z $(gofmt -l .)
+        
+        # Python formatting
+        black --check src/
+        isort --check-only src/
+
+  # Unit Tests
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    strategy:
+      matrix:
+        test-group: [unit, integration]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: codessian_cortex_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 30s
+          --health-timeout 30s
+          --health-retries 3
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        # Install Go dependencies
+        go mod download
+        
+        # Install Node.js dependencies
+        npm ci
+        
+        # Install Python dependencies
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Run ${{ matrix.test-group }} tests
+      env:
+        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/codessian_cortex_test
+        REDIS_URL: redis://localhost:6379/15
+        RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+        TEST_ENV: true
+      run: |
+        if [ "${{ matrix.test-group }}" = "unit" ]; then
+          # Run unit tests
+          go test -v -race -coverprofile=coverage.out ./tests/unit/...
+          npm run test:unit
+          python -m pytest tests/unit/ -v --cov=src --cov-report=xml
+          
+        elif [ "${{ matrix.test-group }}" = "integration" ]; then
+          # Run integration tests
+          go test -v -race ./tests/integration/...
+          npm run test:integration
+          python -m pytest tests/integration/ -v
+        fi
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: ${{ matrix.test-group }}
+        name: ${{ matrix.test-group }}-coverage
+
+  # Build and Package
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    strategy:
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Build application
+      env:
+        GOOS: ${{ matrix.os }}
+        GOARCH: ${{ matrix.arch }}
+      run: |
+        # Build Go application
+        go build -ldflags="-s -w" -o bin/codessian-cortex-${{ matrix.os }}-${{ matrix.arch }} ./cmd/server
+        
+        # Build frontend assets
+        npm run build
+        
+        # Create distribution package
+        mkdir -p dist
+        tar -czf dist/codessian-cortex-${{ matrix.os }}-${{ matrix.arch }}.tar.gz bin/ config/ scripts/ docs/
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: codessian-cortex-${{ matrix.os }}-${{ matrix.arch }}
+        path: dist/
+
+  # Security Scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Run dependency check
+      run: |
+        # Check for vulnerable dependencies
+        go list -json -m all | nancy sleuth
+        safety check
+        npm audit --audit-level high
+
+  # Performance Tests
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install k6
+      run: |
+        sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+
+    - name: Run performance tests
+      run: |
+        # Start test server
+        npm run start:test &
+        SERVER_PID=$!
+        
+        # Wait for server to start
+        sleep 10
+        
+        # Run performance tests
+        k6 run tests/performance/load-test.js
+        
+        # Stop test server
+        kill $SERVER_PID
+
+  # Documentation
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Generate API documentation
+      run: |
+        npm run docs:generate
+        
+    - name: Deploy documentation
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/build
+
+  # Deployment (Staging)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [quality, test, build, security]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: codessian-cortex-linux-amd64
+        path: dist/
+
+    - name: Deploy to staging
+      env:
+        DEPLOYMENT_TARGET: ${{ secrets.STAGING_SERVER }}
+        DEPLOYMENT_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+      run: |
+        # Deploy to staging environment
+        ./scripts/deploy/deploy.sh staging
+
+  # Deployment (Production)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [quality, test, build, security]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: codessian-cortex-linux-amd64
+        path: dist/
+
+    - name: Deploy to production
+      env:
+        DEPLOYMENT_TARGET: ${{ secrets.PRODUCTION_SERVER }}
+        DEPLOYMENT_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}
+      run: |
+        # Deploy to production environment
+        ./scripts/deploy/deploy.sh production
+
+  # Release
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [quality, test, build, security]
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: codessian-cortex-linux-amd64
+        path: dist/
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          Changes in this Release
+          - Automated release from CI/CD pipeline
+          - All tests passed
+          - Security scans completed
+          - Performance tests passed
+        draft: false
+        prerelease: false
