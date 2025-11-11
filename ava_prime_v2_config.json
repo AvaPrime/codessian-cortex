@@ -1,0 +1,747 @@
+{
+  "config_version": "2.0.0",
+  "schema_version": "2.0",
+  "migration": {
+    "from_version": "1.0.0",
+    "backward_compatible": true,
+    "breaking_changes": [],
+    "deprecation_warnings": {
+      "external_commands_without_sandbox": {
+        "message": "Direct command execution deprecated. Use sandboxed commands.",
+        "sunset_date": "2026-01-01",
+        "migration_guide_url": "https://docs.codessa.ai/migration/v2"
+      }
+    },
+    "feature_flags": {
+      "enable_rbac": true,
+      "enable_audit_logging": true,
+      "enable_prompt_validation": true,
+      "enable_error_handling": true,
+      "enable_rate_limiting": true
+    }
+  },
+  
+  "security": {
+    "rbac": {
+      "enabled": true,
+      "roles": {
+        "admin": {
+          "display_name": "Administrator",
+          "permissions": [
+            "execute_commands",
+            "modify_schemas",
+            "view_logs",
+            "manage_users",
+            "delete_data",
+            "modify_workflows",
+            "view_audit_logs"
+          ],
+          "dashboard_access": "full"
+        },
+        "developer": {
+          "display_name": "Developer",
+          "permissions": [
+            "create_codestones",
+            "run_ai_prompts",
+            "update_streams",
+            "view_execution_queue",
+            "create_reflections",
+            "update_execution_queue"
+          ],
+          "dashboard_access": "read_write",
+          "rate_limits": {
+            "ai_prompts_per_hour": 10,
+            "database_writes_per_minute": 50
+          }
+        },
+        "viewer": {
+          "display_name": "Viewer",
+          "permissions": [
+            "view_dashboards",
+            "view_streams",
+            "view_codestones",
+            "view_reflections"
+          ],
+          "dashboard_access": "read_only"
+        }
+      },
+      "default_role": "viewer",
+      "role_inheritance": {
+        "admin": ["developer", "viewer"],
+        "developer": ["viewer"]
+      }
+    },
+    
+    "authentication": {
+      "mfa_required_for_roles": ["admin"],
+      "session_timeout_minutes": 60,
+      "password_policy": {
+        "min_length": 12,
+        "require_uppercase": true,
+        "require_lowercase": true,
+        "require_numbers": true,
+        "require_special_chars": true
+      }
+    },
+    
+    "audit_logging": {
+      "enabled": true,
+      "log_destination": "secure_audit_database",
+      "retention_days": 365,
+      "pii_redaction": true,
+      "events_to_log": [
+        "user_login",
+        "user_logout",
+        "permission_denied",
+        "database_schema_change",
+        "external_command_execution",
+        "ai_prompt_execution",
+        "bulk_data_modification",
+        "sensitive_data_access",
+        "workflow_failure",
+        "configuration_change",
+        "role_assignment_change",
+        "failed_authentication"
+      ],
+      "log_format": {
+        "timestamp": "ISO8601",
+        "user_id": "required",
+        "user_email": "required",
+        "action_type": "required",
+        "resource_affected": "required",
+        "ip_address": "optional",
+        "user_agent": "optional",
+        "success": "boolean",
+        "error_message": "optional",
+        "request_id": "uuid"
+      },
+      "alerting": {
+        "enabled": true,
+        "channels": ["email", "webhook"],
+        "rules": [
+          {
+            "name": "Failed Login Attempts",
+            "condition": "failed_login_count >= 5 within 10 minutes",
+            "severity": "high",
+            "recipients": ["security@codessian.com"]
+          },
+          {
+            "name": "Bulk Data Deletion",
+            "condition": "items_deleted >= 10 in single operation",
+            "severity": "critical",
+            "recipients": ["security@codessian.com", "admin@codessian.com"]
+          },
+          {
+            "name": "External Command Failure",
+            "condition": "command_exit_code != 0",
+            "severity": "medium",
+            "recipients": ["ops@codessian.com"]
+          }
+        ]
+      }
+    },
+    
+    "secrets_management": {
+      "provider": "environment_variables",
+      "encryption": {
+        "at_rest": true,
+        "algorithm": "AES-256-GCM",
+        "key_rotation_days": 90
+      },
+      "required_secrets": [
+        "GITHUB_TOKEN",
+        "GITHUB_REPO_URL",
+        "NOTION_API_KEY",
+        "NOTION_DATABASE_ID_INTELLIGENCE",
+        "NOTION_DATABASE_ID_CODESTONES",
+        "NOTION_DATABASE_ID_REFLECTIONS",
+        "NOTION_DATABASE_ID_EXECUTION",
+        "SYNC_DAEMON_PATH",
+        "AUDIT_LOG_CONNECTION_STRING"
+      ],
+      "rotation_policy": {
+        "github_token": 90,
+        "notion_api_key": 180,
+        "encryption_key": 365
+      }
+    },
+    
+    "data_validation": {
+      "enabled": true,
+      "schemas": {
+        "intelligence_stream": {
+          "Title": {
+            "type": "string",
+            "max_length": 200,
+            "required": true,
+            "sanitization": ["trim", "remove_control_chars"]
+          },
+          "Source": {
+            "type": "select",
+            "allowed_values": ["Claude", "ChatGPT", "GitHub", "Manual", "Automated"],
+            "required": true
+          },
+          "Status": {
+            "type": "select",
+            "allowed_values": ["🌱 Raw", "💎 Refined", "📦 Archived"],
+            "required": true
+          },
+          "Date": {
+            "type": "date",
+            "required": true,
+            "validation": "not_future_date"
+          }
+        },
+        "codestone": {
+          "Title": {
+            "type": "string",
+            "max_length": 200,
+            "required": true
+          },
+          "ECL_Score": {
+            "type": "number",
+            "min": 0.0,
+            "max": 1.0,
+            "required": false,
+            "default": 0.0
+          },
+          "GitHub_Link": {
+            "type": "url",
+            "pattern": "^https://github\\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+",
+            "required": false
+          },
+          "Review_Status": {
+            "type": "select",
+            "allowed_values": ["📝 Draft", "👀 Review", "✅ Approved", "🚀 Merged"],
+            "required": true,
+            "default": "📝 Draft"
+          },
+          "Language": {
+            "type": "select",
+            "allowed_values": ["Python", "JavaScript", "TypeScript", "Rust", "Go", "Java", "Other"],
+            "required": false
+          }
+        }
+      },
+      "on_validation_failure": {
+        "action": "reject_with_message",
+        "log_attempt": true,
+        "notify_user": true
+      }
+    },
+    
+    "rate_limiting": {
+      "enabled": true,
+      "strategies": {
+        "ai_prompts": {
+          "per_user": {
+            "limit": 10,
+            "window": "hour",
+            "burst": 3
+          },
+          "per_workspace": {
+            "limit": 100,
+            "window": "hour"
+          },
+          "backoff_strategy": "exponential",
+          "backoff_multiplier": 2
+        },
+        "external_commands": {
+          "per_user": {
+            "limit": 5,
+            "window": "hour"
+          },
+          "global": {
+            "limit": 20,
+            "window": "hour"
+          }
+        },
+        "database_writes": {
+          "bulk_operations": {
+            "limit": 50,
+            "window": "minute"
+          },
+          "single_operations": {
+            "limit": 200,
+            "window": "minute"
+          }
+        },
+        "web_requests": {
+          "per_user": {
+            "limit": 100,
+            "window": "minute"
+          }
+        }
+      },
+      "on_rate_limit_exceeded": {
+        "response_code": 429,
+        "message": "Rate limit exceeded. Please try again later.",
+        "retry_after_seconds": 60,
+        "log_event": true
+      }
+    }
+  },
+  
+  "external_commands": {
+    "sandbox": {
+      "enabled": true,
+      "default_timeout_seconds": 300,
+      "default_max_memory_mb": 512,
+      "network_isolation": true
+    },
+    "allowed_commands": {
+      "codessa_sync": {
+        "display_name": "Codessa Sync Daemon",
+        "executable": "${SYNC_DAEMON_PATH}/codessa_sync_daemon.py",
+        "interpreter": "python3",
+        "allowed_args": [
+          "--execute-only",
+          "--capture-only",
+          "--dry-run",
+          "--verbose"
+        ],
+        "required_role": "admin",
+        "mfa_required": true,
+        "sandbox": {
+          "enabled": true,
+          "network_access": "restricted",
+          "allowed_domains": ["api.github.com", "api.notion.com"],
+          "filesystem_access": {
+            "read": ["/workspace", "/workspace/config"],
+            "write": ["/workspace/logs", "/workspace/cache"]
+          },
+          "max_execution_time_seconds": 300,
+          "max_memory_mb": 512,
+          "max_cpu_percent": 80
+        },
+        "validation": {
+          "arg_whitelist": true,
+          "path_traversal_check": true,
+          "command_injection_check": true,
+          "shell_metachar_check": true
+        },
+        "audit": {
+          "log_command": true,
+          "log_args": true,
+          "log_user": true,
+          "log_timestamp": true,
+          "log_exit_code": true,
+          "log_output": true,
+          "log_duration": true
+        },
+        "error_handling": {
+          "retry_on_failure": true,
+          "max_retries": 2,
+          "retry_delay_seconds": 60,
+          "on_max_retries_exceeded": "notify_admin"
+        }
+      }
+    },
+    "denied_commands": [
+      "rm",
+      "sudo",
+      "curl",
+      "wget",
+      "ssh",
+      "scp",
+      "nc",
+      "netcat",
+      "dd",
+      "mkfs",
+      "chmod",
+      "chown"
+    ],
+    "command_whitelist_only": true
+  },
+  
+  "ai_prompts": {
+    "version_control": {
+      "enabled": true,
+      "track_changes": true,
+      "require_changelog": true
+    },
+    "validation": {
+      "enabled": true,
+      "max_prompt_length": 8000,
+      "max_context_tokens": 8000,
+      "forbidden_patterns": [
+        "ignore previous instructions",
+        "disregard",
+        "system:",
+        "override",
+        "jailbreak"
+      ]
+    },
+    "prompts": {
+      "morning_briefing": {
+        "version": "3.0.0",
+        "last_updated": "2025-11-11",
+        "changelog": [
+          "v3.0.0 - Added structured output format and validation",
+          "v2.1.0 - Improved context management",
+          "v2.0.0 - Added multi-source synthesis"
+        ],
+        "metrics": {
+          "success_rate": 0.94,
+          "average_tokens": 850,
+          "average_duration_ms": 2300,
+          "user_satisfaction": 4.6
+        },
+        "config": {
+          "max_tokens": 2000,
+          "temperature": 0.3,
+          "model": "claude-sonnet-4-20250514"
+        },
+        "system_context": "You are an AI intelligence analyst for Codessa Intelligence Command Center. Your role is to synthesize information and provide actionable insights. Always maintain objectivity and highlight uncertainties.",
+        "prompt_template": "Generate a morning intelligence briefing for {date}.\n\n# Available Data\n{intelligence_streams}\n\n# Instructions\n1. Identify 3-5 major themes across streams\n2. Highlight urgent items requiring immediate attention (Priority: 🔥 Now)\n3. Suggest 3 specific priority actions with clear owners and deadlines\n4. Flag any blocking issues or dependencies\n5. Note any high-confidence codestones (ECL >= 0.8) ready for deployment\n\n# Output Format\n## Executive Summary\n[2-3 sentence overview]\n\n## Key Themes\n- [Theme 1 with supporting evidence]\n- [Theme 2 with supporting evidence]\n- [Theme 3 with supporting evidence]\n\n## Urgent Items\n- [Item with priority, context, and deadline]\n\n## Recommended Actions\n1. [Action] - Owner: [Person] - Deadline: [Date] - Dependencies: [List]\n2. [Action] - Owner: [Person] - Deadline: [Date] - Dependencies: [List]\n3. [Action] - Owner: [Person] - Deadline: [Date] - Dependencies: [List]\n\n## Deployment Candidates\n- [Codestone name] (ECL: X.XX) - [Brief description]\n\n## Risks & Blockers\n- [Risk or blocker with mitigation strategy]",
+        "data_injection": {
+          "intelligence_streams": {
+            "source": "Intelligence_Streams",
+            "filter": {
+              "Date": {"after": "24_hours_ago"}
+            },
+            "max_items": 30,
+            "format": "markdown_list",
+            "fields": ["Title", "Source", "Status", "Key_Insights", "Project"]
+          }
+        },
+        "sanitization": {
+          "intelligence_streams": [
+            "strip_markdown_links",
+            "escape_special_chars",
+            "max_length_500_per_item"
+          ]
+        },
+        "validation": {
+          "min_length": 200,
+          "max_length": 3000,
+          "required_sections": [
+            "Executive Summary",
+            "Key Themes",
+            "Recommended Actions"
+          ],
+          "max_actions": 5,
+          "min_actions": 2
+        },
+        "error_handling": {
+          "on_validation_failure": "retry_with_constraints",
+          "max_retries": 2,
+          "fallback_behavior": "return_partial_results"
+        }
+      },
+      
+      "code_review": {
+        "version": "2.0.0",
+        "last_updated": "2025-11-11",
+        "config": {
+          "max_tokens": 2500,
+          "temperature": 0.1,
+          "model": "claude-sonnet-4-20250514"
+        },
+        "system_context": "You are a senior software engineer conducting code reviews. Evaluate code objectively using established best practices. Be constructive and specific in feedback.",
+        "prompt_template": "Review the following codestone (ID: {codestone_id}) comprehensively.\n\n---CODESTONE_START---\nTitle: {title}\nLanguage: {language}\nCode:\n{code_content}\n---CODESTONE_END---\n\n# Review Criteria\n\n## Functionality (0-10)\n- Does it solve the stated problem?\n- Are edge cases handled?\n- Is error handling comprehensive?\n\n## Code Quality (0-10)\n- Follows language conventions?\n- Proper naming and documentation?\n- DRY principle applied?\n- Code is readable and maintainable?\n\n## Security (0-10)\n- No injection vulnerabilities?\n- Sensitive data properly handled?\n- Authentication/authorization correct?\n- Input validation present?\n\n## Performance (0-10)\n- Time complexity reasonable?\n- Memory usage optimized?\n- Scalability considerations?\n- No obvious bottlenecks?\n\n# Output Format (JSON)\n```json\n{\n  \"functionality_score\": 0-10,\n  \"code_quality_score\": 0-10,\n  \"security_score\": 0-10,\n  \"performance_score\": 0-10,\n  \"ecl_score\": 0.0-1.0,\n  \"overall_assessment\": \"string\",\n  \"strengths\": [\"string\"],\n  \"weaknesses\": [\"string\"],\n  \"security_issues\": [\"string\"],\n  \"recommended_changes\": [\"string\"],\n  \"recommended_status\": \"📝 Draft | 👀 Review | ✅ Approved\"\n}\n```",
+        "sanitization": {
+          "code_content": [
+            "max_length_10000",
+            "preserve_code_structure"
+          ]
+        },
+        "validation": {
+          "expected_output_format": "json",
+          "schema": {
+            "type": "object",
+            "required": [
+              "functionality_score",
+              "code_quality_score",
+              "security_score",
+              "performance_score",
+              "ecl_score",
+              "overall_assessment"
+            ],
+            "properties": {
+              "ecl_score": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "functionality_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              }
+            }
+          },
+          "on_invalid_output": {
+            "action": "retry_with_format_reminder",
+            "max_retries": 2
+          }
+        }
+      }
+    }
+  },
+  
+  "automation_workflows": [
+    {
+      "name": "Auto-Archive Old Raw Streams",
+      "enabled": true,
+      "trigger": "scheduled",
+      "frequency": "weekly",
+      "schedule_cron": "0 2 * * 0",
+      "condition": {
+        "database": "Intelligence_Streams",
+        "filter": {
+          "and": [
+            {
+              "property": "Status",
+              "select": {"equals": "🌱 Raw"}
+            },
+            {
+              "property": "Date",
+              "date": {"before": "30_days_ago"}
+            }
+          ]
+        }
+      },
+      "action": {
+        "type": "batch_update",
+        "batch_size": 50,
+        "update_property": "Status",
+        "value": "📦 Archived",
+        "progress_callback": "update_system_status"
+      },
+      "error_handling": {
+        "retry_on_failure": true,
+        "max_retries": 3,
+        "retry_delay_seconds": 60,
+        "exponential_backoff": true,
+        "on_max_retries_exceeded": {
+          "action": "log_to_error_database",
+          "notification": {
+            "send_to": "admin",
+            "message": "Archive workflow failed for {count} items after {max_retries} retries",
+            "severity": "high"
+          }
+        }
+      },
+      "metadata": {
+        "last_execution": null,
+        "execution_count": 0,
+        "success_count": 0,
+        "failure_count": 0,
+        "average_duration_ms": 0,
+        "last_error": null,
+        "items_processed": 0
+      }
+    },
+    
+    {
+      "name": "High ECL Alert",
+      "enabled": true,
+      "trigger": "property_change",
+      "watched_property": "ECL_Score",
+      "database": "Codestones",
+      "condition": {
+        "property": "ECL_Score",
+        "number": {"greater_than_or_equal_to": 0.9}
+      },
+      "action": {
+        "type": "notification",
+        "channels": ["email", "dashboard"],
+        "message": "High-confidence codestone detected: {title} (ECL: {ecl_score})",
+        "severity": "info"
+      },
+      "metadata": {
+        "last_triggered": null,
+        "trigger_count": 0
+      }
+    },
+    
+    {
+      "name": "Stale Codestone Alert",
+      "enabled": true,
+      "trigger": "scheduled",
+      "frequency": "daily",
+      "schedule_cron": "0 9 * * *",
+      "condition": {
+        "database": "Codestones",
+        "filter": {
+          "and": [
+            {
+              "property": "Review_Status",
+              "select": {"equals": "👀 Review"}
+            },
+            {
+              "property": "Created_Date",
+              "date": {"before": "7_days_ago"}
+            }
+          ]
+        }
+      },
+      "action": {
+        "type": "multi_step",
+        "steps": [
+          {
+            "type": "update_property",
+            "property": "Priority",
+            "value": "🔥 Urgent"
+          },
+          {
+            "type": "notification",
+            "message": "Codestone {title} awaiting review for 7+ days",
+            "recipients": ["team@codessian.com"],
+            "severity": "medium"
+          }
+        ]
+      },
+      "error_handling": {
+        "retry_on_failure": true,
+        "max_retries": 2
+      }
+    },
+    
+    {
+      "name": "Failed Execution Recovery",
+      "enabled": true,
+      "trigger": "scheduled",
+      "frequency": "hourly",
+      "schedule_cron": "0 * * * *",
+      "condition": {
+        "database": "Execution_Queue",
+        "filter": {
+          "property": "Status",
+          "select": {"equals": "❌ Failed"}
+        }
+      },
+      "action": {
+        "type": "multi_step",
+        "steps": [
+          {
+            "type": "log_error",
+            "log_level": "error",
+            "include_stack_trace": true
+          },
+          {
+            "type": "update_property",
+            "property": "Retry_Count",
+            "operation": "increment",
+            "value": 1
+          },
+          {
+            "type": "conditional",
+            "condition": "prop('Retry_Count') < 3",
+            "then": {
+              "type": "update_property",
+              "property": "Status",
+              "value": "⏳ Queued"
+            },
+            "else": {
+              "type": "multi_step",
+              "steps": [
+                {
+                  "type": "update_property",
+                  "property": "Status",
+                  "value": "⛔ Permanently Failed"
+                },
+                {
+                  "type": "notification",
+                  "message": "Action permanently failed after 3 retries: {title}",
+                  "recipients": ["ops@codessian.com"],
+                  "severity": "high"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  
+  "dashboard": {
+    "title": "🌟 Ava Prime Dashboard",
+    "icon": "🧠",
+    "cover": "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a",
+    "description": "Codessa Intelligence Command Center - Enhanced Security & Reliability",
+    "refresh_interval_seconds": 300,
+    "sections": [
+      {
+        "id": "system_status",
+        "title": "📊 System Status",
+        "type": "callout",
+        "icon": "💫",
+        "content": "Last Sync: {timestamp} | Ava Prime: 🟢 Active | Streams: {count} | Actions: {pending} | Health: {health_score}%",
+        "health_checks": {
+          "enabled": true,
+          "checks": [
+            "database_connectivity",
+            "github_api_reachable",
+            "notion_api_reachable",
+            "disk_space_available",
+            "daemon_responsive"
+          ],
+          "check_interval_seconds": 60
+        }
+      }
+    ]
+  },
+  
+  "monitoring": {
+    "enabled": true,
+    "metrics": {
+      "collect_system_metrics": true,
+      "collect_workflow_metrics": true,
+      "collect_ai_prompt_metrics": true,
+      "retention_days": 90
+    },
+    "health_checks": {
+      "enabled": true,
+      "interval_seconds": 60,
+      "endpoints": [
+        {
+          "name": "GitHub API",
+          "url": "https://api.github.com/status",
+          "timeout_ms": 5000,
+          "expected_status": 200
+        },
+        {
+          "name": "Notion API",
+          "url": "https://api.notion.com/v1/users",
+          "timeout_ms": 5000,
+          "headers": {
+            "Authorization": "Bearer ${NOTION_API_KEY}"
+          },
+          "expected_status": 200
+        }
+      ],
+      "on_failure": {
+        "retry_count": 3,
+        "notify_admin": true
+      }
+    },
+    "performance_tracking": {
+      "track_query_performance": true,
+      "slow_query_threshold_ms": 1000,
+      "track_workflow_duration": true,
+      "track_ai_prompt_latency": true
+    }
+  },
+  
+  "backup": {
+    "enabled": true,
+    "strategy": "incremental",
+    "schedule_cron": "0 3 * * *",
+    "retention_policy": {
+      "daily_backups": 7,
+      "weekly_backups": 4,
+      "monthly_backups": 12
+    },
+    "backup_targets": [
+      "configuration",
+      "database_schemas",
+      "workflow_state",
+      "audit_logs"
+    ],
+    "storage_location": "${BACKUP_STORAGE_PATH}",
+    "encryption": true,
+    "compression": true
+  }
+}
